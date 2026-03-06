@@ -8,6 +8,7 @@ from engine.player import Player
 from engine.player_record import PlayerRecord
 from engine.gamestate import GameState, PlayerInfo, Action
 from engine import hand_evaluator
+from engine import logger as log
 
 class PokerEngine:
 
@@ -48,12 +49,16 @@ class PokerEngine:
                 print("Not enough players left, ending tournament")
                 break
             self.run_hand()
+        log.log_tournament_result(self._records)
 
     def run_hand(self) -> None:
         self._hand_number += 1
         self._reset_for_new_hand()
+        log.log_new_hand(self._hand_number, self._records)
         self._deal_hole_cards()
+        log.log_hole_cards(self._records)
         self._post_blinds()
+        
 
         for street in ["preflop", "flop", "turn", "river"]:
             if street == "flop":
@@ -106,6 +111,7 @@ class PokerEngine:
 
             self._action_history.append(action)
             self._broadcast(action)
+            log.log_action(action)
 
     def _apply_action(self, record: PlayerRecord, action_type: str, amount: int, street: str) -> Action:
         if action_type == "fold":
@@ -167,6 +173,7 @@ class PokerEngine:
 
     def _deal_community(self, n: int) -> None:
         self._community_cards.extend(self._deck.deal(n))
+        log.log_community_cards(self._street, self._community_cards)
 
 
     # Showdown
@@ -180,15 +187,19 @@ class PokerEngine:
             )
             for r in contenders
         }
+        
+        descriptions = {
+            r.player_id: hand_evaluator.describe(
+                tuple(r.hole_cards), tuple(self._community_cards)
+            )
+            for r in contenders
+        }
 
+        log.log_showdown(self._records, descriptions)
         ranked = hand_evaluator.rank_players(scores)
         winners = [self._records[pid] for pid in ranked[0]]
-
-        # optional logging
-        for r in contenders:
-            hand_name = hand_evaluator.describe(tuple(r.hole_cards), tuple(self._community_cards))
-            print(f"{r.bot.name}: {hand_name}")
-
+        log.log_winner(winners, self._pot, descriptions[ranked[0][0]])
+        
         self._award_pot(winners)
 
     def _award_pot(self, contenders: list[PlayerRecord]) -> None:
