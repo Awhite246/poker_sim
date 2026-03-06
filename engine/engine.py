@@ -7,6 +7,7 @@ from engine.gamestate import GameState, PlayerInfo, Action
 from engine.player import Player
 from engine.player_record import PlayerRecord
 from engine.gamestate import GameState, PlayerInfo, Action
+from engine import hand_evaluator
 
 class PokerEngine:
 
@@ -170,9 +171,25 @@ class PokerEngine:
 
     # Showdown
     def _showdown(self) -> None:
-        # placeholder — wire up your hand evaluator here
-        # for now just award the pot to the first active player
-        self._award_pot(self._active_records())
+        contenders = self._active_records()
+
+        scores = {
+            r.player_id: hand_evaluator.evaluate(
+                tuple(r.hole_cards),
+                tuple(self._community_cards),
+            )
+            for r in contenders
+        }
+
+        ranked = hand_evaluator.rank_players(scores)
+        winners = [self._records[pid] for pid in ranked[0]]
+
+        # optional logging
+        for r in contenders:
+            hand_name = hand_evaluator.describe(tuple(r.hole_cards), tuple(self._community_cards))
+            print(f"{r.bot.name}: {hand_name}")
+
+        self._award_pot(winners)
 
     def _award_pot(self, contenders: list[PlayerRecord]) -> None:
         # TODO: side pot logic goes here
